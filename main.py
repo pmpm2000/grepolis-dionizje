@@ -8,6 +8,9 @@ from flask import Flask, request
 webhook_url = 'set your webhook url'
 bot_token = 'set your token'
 
+ROLE_ID = 'role_ID'
+CHANNEL_ID = 'channel_ID'
+
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
@@ -21,6 +24,7 @@ already_alarmed = []
 app = Flask(__name__)
 printlock = threading.Lock()
 queuelock = threading.Lock()
+
 
 base_score = [500, 150, 50, 20]
 score_matrix = [{
@@ -337,6 +341,33 @@ async def on_message(message):
                                        "mieszkancow, aktualna liczbe transow i aktualna liczbe wojska")
             return
 
+def time_until_target(hour, minute, tz_offset):
+    now = datetime.utcnow()
+    target_time = (now + timedelta(hours=tz_offset)).replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if target_time < now + timedelta(hours=tz_offset):
+        target_time += timedelta(days=1)
+    return (target_time - now).total_seconds()
+
+
+def schedule_ping():
+    while True:
+        seconds_until_ping = time_until_target(17, 00, 1)
+        time.sleep(seconds_until_ping)
+        client.loop.create_task(send_ping())
+
+async def send_ping():
+    guild = discord.utils.get(client.guilds)
+    role = discord.utils.get(guild.roles, id=ROLE_ID)
+    channel = client.get_channel(CHANNEL_ID)
+
+    if role and channel:
+        await channel.send(f"{role.mention} Trening!")
+    else:
+        safe_print("Nie znaleziono roli lub kanału!")
+
+def thread_ping():
+    safe_print("Ping thread active.")
+    schedule_ping()
 
 def thread_discord():
     safe_print("Discord thread active.")
@@ -376,6 +407,8 @@ def log_to_file(text, log_file='log.txt'):
 
 print("Starting...")
 x = threading.Thread(target=thread_discord)
+y = threading.Thread(target=thread_ping)
 x.start()
+y.start()
 safe_print("Starting server")
 app.run(port=8002, host="0.0.0.0")
